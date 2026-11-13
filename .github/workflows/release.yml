@@ -1,9 +1,14 @@
-# Builds the addon zip and uploads it to CurseForge (Forever) and GitHub Releases
-# whenever a version tag like v1.0.2 is pushed.
+# Builds the addon zip and uploads it to CurseForge (Forever) and GitHub Releases.
+# Runs when a version tag like v1.0.2 is pushed, or when CHANGELOG.md on main gets
+# a new top entry ("## v1.0.4"): then it tags that version itself and releases it.
 name: Release
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - CHANGELOG.md
     tags:
       - "v*"
 
@@ -21,14 +26,43 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Pick the version
+        id: ver
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          V=$(grep -m1 -oE '^## v[0-9]+(\.[0-9]+)*' CHANGELOG.md | sed 's/^## //' || true)
+          if [ -z "$V" ]; then
+            echo "No version heading in CHANGELOG.md, nothing to release."
+            echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$V" >/dev/null; then
+            echo "$V is already released."
+            echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$V" -m "$V"
+          git push origin "$V"
+          echo "Tagged $V"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
       # Build the zip and the GitHub release; CurseForge upload happens below (-c)
       - name: Package
+        if: steps.ver.outputs.go == 'true'
         uses: BigWigsMods/packager@v2
         with:
           args: -g 1.60.1 -c
 
       - name: Upload to CurseForge (Forever)
+        if: steps.ver.outputs.go == 'true'
         env:
+          VERSION: ${{ steps.ver.outputs.version }}
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           CF_PROJECT_ID: "1803099"
         run: |
@@ -48,7 +82,7 @@ jobs:
           if [ "$GV" = "null" ] || [ -z "$GV" ]; then GV=17053; fi
           echo "Forever game version id: $GV"
 
-          jq -n --arg name "$GITHUB_REF_NAME" --rawfile cl CHANGELOG.md --argjson gv "$GV" \
+          jq -n --arg name "$VERSION" --rawfile cl CHANGELOG.md --argjson gv "$GV" \
             '{displayName: $name, releaseType: "release", changelog: $cl, changelogType: "markdown", gameVersions: [$gv]}' \
             > metadata.json
 
