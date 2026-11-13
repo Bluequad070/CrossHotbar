@@ -1,5 +1,10 @@
 # CrossHotbar Forever
 
+## v1.0.3
+
+- The idle set and the double-tap (LT x2 / RT x2) sets sit lower and a little smaller by default, and the bars are a bit larger (120%).
+- New settings section, "Idle and double-tap sets": height and size for the idle set, plus height, spread and size for the double-tap sets.
+
 ## v1.0.2
 First release on CurseForge.
 

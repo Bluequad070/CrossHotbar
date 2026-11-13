@@ -53,7 +53,7 @@ local function LoadSettings()
     for k, v in pairs(DEFAULT_BASE) do
         if not CrossHotbarDB.base[k] then CrossHotbarDB.base[k] = v end
     end
-    CrossHotbarDB.scale = CrossHotbarDB.scale or 1
+    CrossHotbarDB.scale = CrossHotbarDB.scale or 1.2
     CrossHotbarDB.flyoutScale = CrossHotbarDB.flyoutScale or 0.7
     CrossHotbarDB.offsetX = CrossHotbarDB.offsetX or 0
     CrossHotbarDB.offsetY = CrossHotbarDB.offsetY or 0
@@ -68,6 +68,15 @@ local function LoadSettings()
         CrossHotbarDB.layoutV2 = true
     end
     CrossHotbarDB.dimAlpha = CrossHotbarDB.dimAlpha or 0.45
+    if not CrossHotbarDB.layoutV3 then
+        -- idle and double-tap sets moved lower and a bit smaller
+        CrossHotbarDB.flyoutScale = 0.45
+        CrossHotbarDB.layoutV3 = true
+    end
+    CrossHotbarDB.idleY = CrossHotbarDB.idleY or 255
+    CrossHotbarDB.idleScale = CrossHotbarDB.idleScale or 0.5
+    CrossHotbarDB.flyY = CrossHotbarDB.flyY or 220
+    CrossHotbarDB.flyX = CrossHotbarDB.flyX or 240
     CrossHotbarDB.point = nil -- old setting from earlier versions
     for _, k in ipairs({ "errors", "dump", "inspect", "maskInfo", "bindProbe", "bindProbeStats", "native", "inactiveAlpha" }) do
         CrossHotbarDB[k] = nil
@@ -677,10 +686,12 @@ local function Layout()
 
     LayoutCluster(clusters.L, sc * LAYOUT.bottomScale, ox - LAYOUT.bottomX * unit * sc, by)
     LayoutCluster(clusters.R, sc * LAYOUT.bottomScale, ox + LAYOUT.bottomX * unit * sc, by)
-    LayoutCluster(clusters.C, sc * LAYOUT.centerScale, ox, ty)
-    local fy = LAYOUT.flyY * unit * sc + oy
-    LayoutCluster(clusters.LL, sc * CrossHotbarDB.flyoutScale, ox - LAYOUT.flyX * unit * sc, fy)
-    LayoutCluster(clusters.RR, sc * CrossHotbarDB.flyoutScale, ox + LAYOUT.flyX * unit * sc, fy)
+    local iy = CrossHotbarDB.idleY * unit * sc + oy
+    LayoutCluster(clusters.C, sc * CrossHotbarDB.idleScale, ox, iy)
+    local fy = CrossHotbarDB.flyY * unit * sc + oy
+    local fx = CrossHotbarDB.flyX * unit * sc
+    LayoutCluster(clusters.LL, sc * CrossHotbarDB.flyoutScale, ox - fx, fy)
+    LayoutCluster(clusters.RR, sc * CrossHotbarDB.flyoutScale, ox + fx, fy)
     LayoutCluster(clusters.X, sc * LAYOUT.bottomScale, 0, ty)
     clusters.X:Hide()
     PlacePlayerFrame()
@@ -1280,7 +1291,9 @@ local ROWS = {
         value = function() return "Press A" end,
         activate = function()
             CrossHotbarDB.offsetX, CrossHotbarDB.offsetY = 0, 0
-            CrossHotbarDB.scale, CrossHotbarDB.flyoutScale = 1, 0.5
+            CrossHotbarDB.scale, CrossHotbarDB.flyoutScale = 1.2, 0.45
+            CrossHotbarDB.idleY, CrossHotbarDB.idleScale = 255, 0.5
+            CrossHotbarDB.flyY, CrossHotbarDB.flyX = 220, 240
             Layout()
         end,
     },
@@ -1505,7 +1518,7 @@ end
 ---------------------------------------------------------------------------
 do
     local f = CreateFrame("Frame", "XHB_Options", UIParent, "BackdropTemplate")
-    f:SetSize(640, 560)
+    f:SetSize(640, 620)
     f:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
     f:SetFrameStrata("DIALOG")
     f:SetToplevel(true)
@@ -1614,9 +1627,6 @@ do
     Slider("Bar size", "Small", "Large", 0.5, 2, 0.05,
         function() return CrossHotbarDB.scale end,
         function(v) CrossHotbarDB.scale = v; relayout() end, pct, L, -184)
-    Slider("Flyout size", "Small", "Large", 0.4, 1.2, 0.05,
-        function() return CrossHotbarDB.flyoutScale end,
-        function(v) CrossHotbarDB.flyoutScale = v; relayout() end, pct, L, -246)
     Slider("Button style", STYLE_NAMES[STYLES[1]], STYLE_NAMES[STYLES[#STYLES]], 1, #STYLES, 1,
         function()
             local cur = CurrentStyle()
@@ -1624,15 +1634,15 @@ do
             return 1
         end,
         function(v) CrossHotbarDB.style = STYLES[v] or STYLES[1]; relayout() end,
-        function(v) return STYLE_NAMES[STYLES[v] or STYLES[1]] end, L, -308)
+        function(v) return STYLE_NAMES[STYLES[v] or STYLES[1]] end, L, -246)
     Slider("Move left / right", "Left", "Right", -800, 800, 5,
         function() return CrossHotbarDB.offsetX end,
         function(v) CrossHotbarDB.offsetX = v; relayout() end,
-        function(v) return tostring(v) end, L, -370)
+        function(v) return tostring(v) end, L, -308)
     Slider("Move up / down", "Down", "Up", -200, 600, 5,
         function() return CrossHotbarDB.offsetY end,
         function(v) CrossHotbarDB.offsetY = v; relayout() end,
-        function(v) return tostring(v) end, L, -432)
+        function(v) return tostring(v) end, L, -370)
 
     Check("Flyouts always visible",
         function() return CrossHotbarDB.showFlyouts end,
@@ -1643,17 +1653,38 @@ do
     Check("Show button labels",
         function() return CrossHotbarDB.showLabels end,
         function(v) CrossHotbarDB.showLabels = v; Refresh() end, R, -128)
+    local section = f:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    section:SetPoint("TOPLEFT", f, "TOPLEFT", R, -168)
+    section:SetText("Idle and double-tap sets")
+    local function num(v) return tostring(v) end
+    Slider("Idle set height", "Down", "Up", 60, 500, 5,
+        function() return CrossHotbarDB.idleY end,
+        function(v) CrossHotbarDB.idleY = v; relayout() end, num, R, -208)
+    Slider("Idle set size", "Small", "Large", 0.3, 1, 0.05,
+        function() return CrossHotbarDB.idleScale end,
+        function(v) CrossHotbarDB.idleScale = v; relayout() end, pct, R, -270)
+    Slider("Double-tap height", "Down", "Up", 60, 500, 5,
+        function() return CrossHotbarDB.flyY end,
+        function(v) CrossHotbarDB.flyY = v; relayout() end, num, R, -332)
+    Slider("Double-tap spread", "Close", "Wide", 0, 600, 5,
+        function() return CrossHotbarDB.flyX end,
+        function(v) CrossHotbarDB.flyX = v; relayout() end, num, R, -394)
+    Slider("Double-tap size", "Small", "Large", 0.3, 1.2, 0.05,
+        function() return CrossHotbarDB.flyoutScale end,
+        function(v) CrossHotbarDB.flyoutScale = v; relayout() end, pct, R, -456)
     Button("Reset position and size", function()
         CrossHotbarDB.offsetX, CrossHotbarDB.offsetY = 0, 0
-        CrossHotbarDB.scale, CrossHotbarDB.flyoutScale = 1, 0.5
+        CrossHotbarDB.scale, CrossHotbarDB.flyoutScale = 1.2, 0.45
+        CrossHotbarDB.idleY, CrossHotbarDB.idleScale = 255, 0.5
+        CrossHotbarDB.flyY, CrossHotbarDB.flyX = 220, 240
         relayout()
         for _, c in ipairs(nav) do c.refresh() end
-    end, R, -180)
-    Button("Close", function() f:Hide() end, R, -216)
+    end, R, -506)
+    Button("Close", function() f:Hide() end, R, -542)
 
     local tip = f:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
-    tip:SetPoint("TOPLEFT", f, "TOPLEFT", R, -264)
-    tip:SetWidth(240)
+    tip:SetPoint("TOPLEFT", f, "TOPLEFT", L, -430)
+    tip:SetWidth(250)
     tip:SetJustifyH("LEFT")
     tip:SetText("Hold LT + RT and press View to open this window.\n\nLT, RT and LT + RT bind through Blizzard's normal spellbook / bag Bind flow. To fill the flyouts, open the spellbook or bags and drag spells or items onto them with the mouse.")
 
