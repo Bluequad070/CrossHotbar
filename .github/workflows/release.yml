@@ -1,5 +1,5 @@
-# Builds the addon zip and uploads it to CurseForge (and GitHub Releases)
-# whenever a version tag like v1.0.0 is pushed.
+# Builds the addon zip and uploads it to CurseForge (Forever) and GitHub Releases
+# whenever a version tag like v1.0.2 is pushed.
 name: Release
 
 on:
@@ -14,7 +14,6 @@ jobs:
   release:
     runs-on: ubuntu-latest
     env:
-      CF_API_KEY: ${{ secrets.CF_API_KEY }}
       GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Check out the code
@@ -22,8 +21,41 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Package and upload
+      # Build the zip and the GitHub release; CurseForge upload happens below (-c)
+      - name: Package
         uses: BigWigsMods/packager@v2
         with:
-          # CurseForge's "Forever" game version
-          args: -g 1.60.1
+          args: -g 1.60.1 -c
+
+      - name: Upload to CurseForge (Forever)
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CF_PROJECT_ID: "1803099"
+        run: |
+          set -euo pipefail
+          ZIP=$(ls .release/*.zip | head -n 1)
+          echo "Zip: $ZIP"
+
+          status=$(curl -sS -o versions.json -w "%{http_code}" \
+            -H "X-Api-Token: $CF_API_KEY" https://wow.curseforge.com/api/game/versions)
+          echo "Game version list: HTTP $status"
+          if [ "$status" != "200" ]; then
+            head -c 400 versions.json; echo
+            echo "::error::CurseForge rejected the request (HTTP $status). Check the CF_API_KEY secret."
+            exit 1
+          fi
+          GV=$(jq '[.[] | select(.name == "1.60.1") | .id] | first' versions.json)
+          if [ "$GV" = "null" ] || [ -z "$GV" ]; then GV=17053; fi
+          echo "Forever game version id: $GV"
+
+          jq -n --arg name "$GITHUB_REF_NAME" --rawfile cl CHANGELOG.md --argjson gv "$GV" \
+            '{displayName: $name, releaseType: "release", changelog: $cl, changelogType: "markdown", gameVersions: [$gv]}' \
+            > metadata.json
+
+          status=$(curl -sS -o response.txt -w "%{http_code}" \
+            -H "X-Api-Token: $CF_API_KEY" \
+            -F "metadata=<metadata.json" -F "file=@$ZIP" \
+            "https://wow.curseforge.com/api/projects/$CF_PROJECT_ID/upload-file")
+          echo "Upload: HTTP $status"
+          cat response.txt; echo
+          [ "$status" = "200" ]

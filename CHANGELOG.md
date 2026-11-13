@@ -1,5 +1,8 @@
 # CrossHotbar Forever
 
+## v1.0.2
+First release on CurseForge.
+
 ## v1.0.0
 First public release.
 
