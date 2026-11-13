@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: CrossHotbar Forever
+## Notes: FFXIV-style cross hotbar for WoW: Forever's gamepad UI. LT / RT / LT+RT sets, double-tap flyouts, native look.
+## Author: Bqlock
+## Version: @project-version@
+## Category: Action Bars
+## X-License: MIT
+## X-Website: https://www.curseforge.com/wow/addons/crosshotbar-forever
+## SavedVariables: CrossHotbarDB
+
+CrossHotbar.lua
