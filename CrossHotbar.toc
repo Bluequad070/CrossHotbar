@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## Category: Action Bars
 ## X-License: MIT
+## X-Curse-Project-ID: 1803099
 ## X-Website: https://www.curseforge.com/wow/addons/crosshotbar-forever
 ## SavedVariables: CrossHotbarDB
 
